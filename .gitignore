@@ -1,0 +1,11 @@
+# Python / venv
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local environment files
+.env
+
+# Streamlit stuff
+.streamlit/

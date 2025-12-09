@@ -1,0 +1,8 @@
+streamlit
+google-generativeai
+python-docx
+PyPDF2
+python-dotenv
+requests
+beautifulsoup4
+yfinance
