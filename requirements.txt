@@ -1,4 +1,11 @@
-streamlit
+# Liquidity Crunch Dependencies (Streamlit Cloud)
+streamlit>=1.28.0
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+scipy>=1.11.0
+
+# Other project dependencies
 google-generativeai
 python-docx
 PyPDF2
@@ -6,3 +13,4 @@ python-dotenv
 requests
 beautifulsoup4
 yfinance
+python-pptx
