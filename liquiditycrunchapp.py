@@ -291,61 +291,72 @@ if st.session_state.mc_results:
     valid_results = [r for r in results if r['valid_run']]
     wins = [r for r in valid_results if r['win']]
     
-    # IRR histogram
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    
-    # IRR plot
-    irrs = [r['irr'] * 100 for r in wins if r['irr_status'] == 'valid']
-    if irrs:
-        ax1.hist(irrs, bins=30, color='#4ECDC4', edgecolor='black', alpha=0.7)
-        ax1.axvline(np.median(irrs), color='red', linestyle='--', linewidth=2, label=f'Median: {np.median(irrs):.1f}%')
-        ax1.set_xlabel('IRR (%)')
-        ax1.set_ylabel('Frequency')
-        ax1.set_title('IRR Distribution (Wins Only)')
-        ax1.legend()
-        ax1.grid(alpha=0.3)
-    
-    # MOIC plot
-    moics = [r['moic'] for r in wins]
-    if moics:
-        ax2.hist(moics, bins=30, color='#FF6B6B', edgecolor='black', alpha=0.7)
-        ax2.axvline(np.median(moics), color='blue', linestyle='--', linewidth=2, label=f'Median: {np.median(moics):.2f}x')
-        ax2.set_xlabel('MOIC (x)')
-        ax2.set_ylabel('Frequency')
-        ax2.set_title('MOIC Distribution (Wins Only)')
-        ax2.legend()
-        ax2.grid(alpha=0.3)
-    
-    plt.tight_layout()
-    st.pyplot(fig)
-    
-    # Detailed statistics table
-    st.subheader("📊 Detailed Statistics")
-    
-    if irrs and moics:
-        stats_df = pd.DataFrame({
-            'Metric': ['Mean', 'Median', 'Std Dev', 'P10', 'P25', 'P75', 'P90'],
-            'IRR (%)': [
-                f"{np.mean(irrs):.1f}",
-                f"{np.median(irrs):.1f}",
-                f"{np.std(irrs):.1f}",
-                f"{np.percentile(irrs, 10):.1f}",
-                f"{np.percentile(irrs, 25):.1f}",
-                f"{np.percentile(irrs, 75):.1f}",
-                f"{np.percentile(irrs, 90):.1f}",
-            ],
-            'MOIC (x)': [
-                f"{np.mean(moics):.2f}",
-                f"{np.median(moics):.2f}",
-                f"{np.std(moics):.2f}",
-                f"{np.percentile(moics, 10):.2f}",
-                f"{np.percentile(moics, 25):.2f}",
-                f"{np.percentile(moics, 75):.2f}",
-                f"{np.percentile(moics, 90):.2f}",
-            ]
-        })
+    if not wins:
+        st.warning(f"⚠️ No winning runs out of {len(valid_results)} simulations. Try increasing the number of simulations or check game balance.")
+    else:
+        # IRR histogram
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
-        st.dataframe(stats_df, use_container_width=True, hide_index=True)
+        # IRR plot
+        irrs = [r['irr'] * 100 for r in wins if r['irr_status'] == 'valid']
+        if irrs:
+            ax1.hist(irrs, bins=30, color='#4ECDC4', edgecolor='black', alpha=0.7)
+            ax1.axvline(np.median(irrs), color='red', linestyle='--', linewidth=2, label=f'Median: {np.median(irrs):.1f}%')
+            ax1.set_xlabel('IRR (%)')
+            ax1.set_ylabel('Frequency')
+            ax1.set_title('IRR Distribution (Wins Only)')
+            ax1.legend()
+            ax1.grid(alpha=0.3)
+        else:
+            ax1.text(0.5, 0.5, 'No valid IRR data', ha='center', va='center', transform=ax1.transAxes)
+            ax1.set_title('IRR Distribution (Wins Only)')
+        
+        # MOIC plot
+        moics = [r['moic'] for r in wins]
+        if moics:
+            ax2.hist(moics, bins=30, color='#FF6B6B', edgecolor='black', alpha=0.7)
+            ax2.axvline(np.median(moics), color='blue', linestyle='--', linewidth=2, label=f'Median: {np.median(moics):.2f}x')
+            ax2.set_xlabel('MOIC (x)')
+            ax2.set_ylabel('Frequency')
+            ax2.set_title('MOIC Distribution (Wins Only)')
+            ax2.legend()
+            ax2.grid(alpha=0.3)
+        else:
+            ax2.text(0.5, 0.5, 'No MOIC data', ha='center', va='center', transform=ax2.transAxes)
+            ax2.set_title('MOIC Distribution (Wins Only)')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # Detailed statistics table
+        st.subheader("📊 Detailed Statistics")
+        
+        if irrs and moics:
+            stats_df = pd.DataFrame({
+                'Metric': ['Mean', 'Median', 'Std Dev', 'P10', 'P25', 'P75', 'P90'],
+                'IRR (%)': [
+                    f"{np.mean(irrs):.1f}",
+                    f"{np.median(irrs):.1f}",
+                    f"{np.std(irrs):.1f}",
+                    f"{np.percentile(irrs, 10):.1f}",
+                    f"{np.percentile(irrs, 25):.1f}",
+                    f"{np.percentile(irrs, 75):.1f}",
+                    f"{np.percentile(irrs, 90):.1f}",
+                ],
+                'MOIC (x)': [
+                    f"{np.mean(moics):.2f}",
+                    f"{np.median(moics):.2f}",
+                    f"{np.std(moics):.2f}",
+                    f"{np.percentile(moics, 10):.2f}",
+                    f"{np.percentile(moics, 25):.2f}",
+                    f"{np.percentile(moics, 75):.2f}",
+                    f"{np.percentile(moics, 90):.2f}",
+                ]
+            })
+            
+            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("📊 Statistics will appear when there are winning runs with valid IRR data.")
 
 # ==================== Footer ====================
 

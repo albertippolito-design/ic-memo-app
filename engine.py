@@ -758,10 +758,15 @@ class Engine:
         if gs.game_over:
             return
         
-        inject = 10_000_000  # €10m
+        if gs.equity_remaining <= 0:
+            gs.reason = "No equity remaining to inject."
+            return
+        
+        inject = min(10_000_000, gs.equity_remaining)  # €10m or remaining
         gs.cash += inject
         gs.equity_used += inject
         gs.equity_total += inject
+        gs.equity_remaining -= inject
         
         # Track equity injection
         gs.equity_in_total += inject
@@ -769,7 +774,7 @@ class Engine:
         # Record equity cashflow for IRR
         gs.equity_cashflows.append({'month': gs.month, 'amount': -inject})
         
-        gs.reason = f"Injected {money(inject)} equity. Total equity: {money(gs.equity_total)}."
+        gs.reason = f"Injected {money(inject)} equity. Total equity: {money(gs.equity_total)}. Remaining: {money(gs.equity_remaining)}."
     
     def action_sales_push(self):
         """Activate sales acceleration (temporary)"""
@@ -811,34 +816,112 @@ class Engine:
         
         gs.reason = f"Drew {money(draw)} from revolver. Total: {money(gs.revolver_drawn)}/{money(gs.max_revolver)}."
     
+    def action_resolve_event(self):
+        """Resolve active event by paying resolution cost"""
+        gs = self.gs
+        if gs.game_over:
+            return
+        if not gs.active_events:
+            gs.reason = "No active event to resolve."
+            return
+        
+        # Resolve the worst event (by impact score)
+        def impact_score(e):
+            s = 0.0
+            s += (e.dev_cost_mult - 1.0) * 3.0
+            s += (1.0 - e.sales_mult) * 2.0
+            s += (1.0 - e.progress_mult) * 2.0
+            s += e.rate_add * 50.0
+            s += 1.5 if e.debt_lock else 0.0
+            return s * e.months_left
+        
+        ev = max(gs.active_events, key=impact_score)
+        
+        # Calculate resolve cost
+        monthly_burn = self.monthly_construction_cost() + int(gs.debt * self.current_rate() / 12.0)
+        remaining_capex = int(DEV_COSTS * (100 - gs.progress) / 100)
+        cost = int(STRESS_CONFIG.resolve_cost_months_of_burn * monthly_burn)
+        cost_cap = int(STRESS_CONFIG.resolve_cost_cap_pct_capex * remaining_capex)
+        cost = min(cost, max(cost_cap, 5_000_000))  # Min €5m
+        
+        if gs.cash < cost:
+            gs.reason = f"Not enough cash to resolve {ev.name} (need {money(cost)})."
+            return
+        
+        gs.cash -= cost
+        gs.event_costs_paid_total += cost
+        gs.total_costs_incurred += cost
+        gs.active_events.remove(ev)
+        gs.reason = f"Resolved {ev.name} for {money(cost)}. Impacts removed."
+    
     # ==================== AI Decision Making ====================
     
+    def calculate_runway(self):
+        """Calculate months of cash runway based on monthly burn"""
+        gs = self.gs
+        if gs.last_month_burn >= 0:
+            return float('inf')  # Positive cashflow = infinite runway
+        burn_rate = abs(gs.last_month_burn)
+        if burn_rate == 0:
+            return float('inf')
+        return gs.cash / burn_rate
+    
     def ai_decide_action(self):
-        """Simple rule-based AI to play the game"""
+        """AI decides which action to take this month (if any)"""
         gs = self.gs
         if gs.game_over:
             return
         
-        # Liquidity crisis management
-        if gs.cash < 30_000_000:
-            if gs.bank_gate_met and gs.debt < gs.max_debt:
+        runway = self.calculate_runway()
+        
+        # Priority: Use revolver for short-term liquidity
+        if gs.cash < 20_000_000 and gs.revolver_drawn < gs.max_revolver:
+            self.action_draw_revolver()
+            return
+        
+        # Priority 1: Survive (runway < 2 months)
+        if runway < 2.0 and runway != float('inf'):
+            # Try to raise debt first
+            if gs.bank_gate_met and not self.has_debt_lock() and gs.debt < gs.max_debt:
                 self.action_raise_debt()
                 return
-            elif gs.revolver_drawn < gs.max_revolver:
-                self.action_draw_revolver()
-                return
-            else:
+            # Otherwise inject equity
+            elif gs.equity_remaining > 0:
                 self.action_inject_equity()
                 return
         
-        # Normal operation: raise debt when gate met
-        if gs.bank_gate_met and gs.debt < gs.max_debt * 0.5:
-            self.action_raise_debt()
-            return
+        # Priority 2: Unlock bank gate if close
+        if not gs.bank_gate_met:
+            units_threshold = int(TOTAL_UNITS * BANK_GATE_UNITS_PCT)
+            deposits_needed = BANK_GATE_DEPOSITS - gs.deposits_collected
+            units_needed = units_threshold - gs.units_sold
+            
+            # If close to unlocking and have cash, push sales
+            if (units_needed < 30 or deposits_needed < 10_000_000) and gs.cash > 20_000_000:
+                if not gs.sales_push:
+                    self.action_sales_push()
+                    return
         
-        # Strategic cash management
-        if gs.cash < 50_000_000 and gs.bank_gate_met:
-            self.action_raise_debt()
+        # Priority 3: Manage construction costs if cash tight
+        if runway < 4.0 and runway != float('inf') and gs.progress < 90:
+            if not gs.slow_build and gs.cash < 50_000_000:
+                self.action_slow_build()
+                return
+        
+        # Priority 4: Push sales if lagging
+        sold_ratio = gs.units_sold / gs.units_total
+        progress_ratio = gs.progress / 100.0
+        if progress_ratio > sold_ratio + 0.15 and gs.cash > 15_000_000:
+            if not gs.sales_push:
+                self.action_sales_push()
+                return
+        
+        # Priority 5: Resolve expensive events
+        if gs.active_events and gs.cash > 30_000_000:
+            worst_event = max(gs.active_events, key=lambda e: e.months_left * (2.0 - e.sales_mult + e.dev_cost_mult))
+            if worst_event.months_left > 2:
+                self.action_resolve_event()
+                return
     
     # ==================== Calculations ====================
     
