@@ -66,8 +66,8 @@ UNIT_PRICE = 1_000_000      # €1m per unit
 GDV = TOTAL_UNITS * UNIT_PRICE  # €1bn
 
 # Payment Structure
-DEPOSIT_1_PCT = 0.05        # 5% at sale
-DEPOSIT_2_PCT = 0.25        # 25% at 12 months
+DEPOSIT_1_PCT = 0.15        # 15% on contract
+DEPOSIT_2_PCT = 0.15        # 15% at 12 months
 COMPLETION_PCT = 0.70       # 70% at completion
 
 # Bank Gate Requirements
